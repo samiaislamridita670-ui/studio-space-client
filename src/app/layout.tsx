@@ -1,4 +1,5 @@
-﻿import { Toaster } from "sonner";
+﻿import { Suspense } from "react";
+import { Toaster } from "sonner";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -29,8 +30,9 @@ return (
 <html
 lang="en"
 className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-> <body className="flex min-h-full flex-col"> <Navbar /> <div className="flex-1">{children}</div>         <Toaster position="top-right" richColors closeButton />
+> <body className="flex min-h-full flex-col"> <Suspense fallback={<div className="h-20 bg-white" />}><Navbar /></Suspense> <div className="flex-1">{children}</div>         <Toaster position="top-right" richColors closeButton />
       </body> </html>
 );
 }
+
 

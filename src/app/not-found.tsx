@@ -14,7 +14,7 @@ export default function NotFound() {
 
         <p className="mb-8 text-lg text-slate-600">
           The creative space you are looking for could not be found.
-          Let's get you back to exploring amazing studios.
+          Let&apos;s get you back to exploring amazing studios.
         </p>
 
         <Link
@@ -27,3 +27,5 @@ export default function NotFound() {
     </main>
   );
 }
+
+

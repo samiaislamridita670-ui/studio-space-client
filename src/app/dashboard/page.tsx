@@ -24,6 +24,8 @@ const stats = [
   },
 ];
 
+import ConnectGoogleAccount from "@/components/ConnectGoogleAccount";
+
 export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-12 sm:px-6 lg:px-8">
@@ -127,7 +129,10 @@ export default function DashboardPage() {
           </section>
 
         </div>
+
+        <ConnectGoogleAccount />
       </div>
     </main>
   );
 }
+

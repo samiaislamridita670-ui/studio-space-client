@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { signUp, signIn } from "@/lib/auth-client";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -29,32 +30,36 @@ export default function RegisterPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!form.name.trim()) {
+    const name = form.name.trim();
+    const email = form.email.trim().toLowerCase();
+    const password = form.password;
+
+    if (!name) {
       toast.error("Please enter your full name.");
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       toast.error("Please enter a valid email address.");
       return;
     }
 
-    if (form.password.length < 6) {
+    if (password.length < 6) {
       toast.error("Password must contain at least 6 characters.");
       return;
     }
 
-    if (!/[A-Z]/.test(form.password)) {
+    if (!/[A-Z]/.test(password)) {
       toast.error("Password must contain an uppercase letter.");
       return;
     }
 
-    if (!/[a-z]/.test(form.password)) {
+    if (!/[a-z]/.test(password)) {
       toast.error("Password must contain a lowercase letter.");
       return;
     }
 
-    if (form.password !== form.confirmPassword) {
+    if (password !== form.confirmPassword) {
       toast.error("Passwords do not match.");
       return;
     }
@@ -62,31 +67,25 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(
-        "http://localhost:5000/api/auth/register",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: form.name.trim(),
-            email: form.email.trim().toLowerCase(),
-            image: form.image.trim(),
-            password: form.password,
-          }),
-        }
-      );
+      const { data, error } = await signUp.email({
+        name,
+        email,
+        password,
+        ...(form.image.trim() ? { image: form.image.trim() } : {}),
+      });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Registration failed.");
+      if (error) {
+        throw new Error(error.message || "Registration failed.");
       }
 
-      toast.success("Account created successfully! Please sign in.");
+      if (!data) {
+        throw new Error("Registration did not return account information.");
+      }
 
-      router.push("/login");
+      toast.success("Account created successfully!");
+
+      router.push("/dashboard");
+      router.refresh();
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -263,13 +262,11 @@ export default function RegisterPage() {
           </div>
 
           <button
-            type="button"
-            disabled
-            title="Google sign-up will be available soon"
-            className="flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-500 opacity-60"
+            type="button" onClick={async () => { try { const { error } = await signIn.social({ provider: "google", callbackURL: "/" }); if (error) { alert(error.message || "Google sign-in failed."); } } catch (error) { alert(error instanceof Error ? error.message : "Google sign-in failed."); } }}
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-500 "
           >
             <span className="text-xl font-bold">G</span>
-            Continue with Google (Coming Soon)
+            Continue with Google
           </button>
 
           <p className="mt-7 text-center text-sm text-slate-600">
@@ -286,3 +283,4 @@ export default function RegisterPage() {
     </main>
   );
 }
+

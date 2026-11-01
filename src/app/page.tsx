@@ -188,7 +188,7 @@ maximumFractionDigits: 0,
 
 const currentSlide = slides[activeSlide];
 
-return ( <main className="min-h-screen bg-[#f8f9f4] text-[#20231f]">
+return ( <main className="min-h-screen bg-[#f8f9f4] text-[#20231f] dark:bg-slate-950 dark:text-slate-100">
 {/* Hero Section */} <section className="relative overflow-hidden bg-[#20231f]"> <div className="absolute inset-0">
 {slides.map((slide, index) => (
 <div key={slide.title}
@@ -399,7 +399,7 @@ aria-hidden={activeSlide !== index}
         <Link
           key={category.name}
           href={`/studios?category=${encodeURIComponent(category.name)}`}
-          className="group overflow-hidden rounded-2xl border border-gray-200 bg-white transition duration-300 hover:-translate-y-1 hover:border-[#c7dd81] hover:shadow-xl hover:shadow-black/5"
+          className="group overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-800 transition duration-300 hover:-translate-y-1 hover:border-[#c7dd81] hover:shadow-xl hover:shadow-black/5"
         >
           <div className="relative h-44 overflow-hidden">
             <img
@@ -437,7 +437,7 @@ aria-hidden={activeSlide !== index}
   </section>
 
   {/* Featured Studios */}
-  <section className="border-y border-gray-200 bg-white py-20">
+  <section className="border-y border-gray-200 bg-white py-20 dark:border-slate-700 dark:bg-slate-900">
     <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-8">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
@@ -484,7 +484,7 @@ aria-hidden={activeSlide !== index}
             <Link
               href={`/studios/${studio._id}`}
               key={studio._id}
-              className="group overflow-hidden rounded-2xl border border-gray-200 bg-white transition duration-300 hover:-translate-y-1 hover:border-[#c7dd81] hover:shadow-xl hover:shadow-black/5"
+              className="group overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-800 transition duration-300 hover:-translate-y-1 hover:border-[#c7dd81] hover:shadow-xl hover:shadow-black/5"
             >
               <div className="relative h-56 overflow-hidden bg-gray-100">
                 <img
@@ -602,7 +602,7 @@ aria-hidden={activeSlide !== index}
       {steps.map((step) => (
         <div
           key={step.number}
-          className="rounded-2xl border border-gray-200 bg-white p-6 transition hover:border-[#c7dd81] hover:shadow-lg hover:shadow-black/5"
+          className="rounded-2xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-800 p-6 transition hover:border-[#c7dd81] hover:shadow-lg hover:shadow-black/5"
         >
           <div className="flex items-center justify-between">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#eff5df] text-2xl font-bold text-[#526f16]">
@@ -660,7 +660,7 @@ aria-hidden={activeSlide !== index}
   </section>
 
   {/* About */}
-  <section id="about" className="scroll-mt-24 bg-white py-16">
+  <section id="about" className="scroll-mt-24 bg-white py-16 dark:bg-slate-900">
     <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 md:grid-cols-2 md:items-center lg:px-8">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#668b18]">
@@ -796,6 +796,7 @@ aria-hidden={activeSlide !== index}
 
 );
 }
+
 
 
 

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { toast } from "sonner";
+import { useTheme } from "next-themes";
+import { Moon, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -60,6 +62,39 @@ function ProfileAvatar({
     </span>
   );
 }
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div
+        className="h-10 w-10 rounded-xl border border-slate-200"
+        aria-hidden="true"
+      />
+    );
+  }
+
+  const isDark = theme === "dark";
+
+  return (
+    <button
+      type="button"
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-800 dark:text-yellow-300 dark:hover:bg-slate-700"
+    >
+      {isDark ? <Sun size={20} /> : <Moon size={20} />}
+    </button>
+  );
+}
+
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -143,7 +178,7 @@ export default function Navbar() {
 
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 text-slate-900 shadow-sm backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 text-slate-900 shadow-sm backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <Link
           href="/"
@@ -176,6 +211,7 @@ export default function Navbar() {
         </div>
 
         <div className="hidden items-center gap-3 lg:flex">
+          <ThemeToggle />
           {isPending ? (
             <div
               className="h-10 w-28 animate-pulse rounded-xl bg-slate-100"
@@ -323,6 +359,7 @@ export default function Navbar() {
             ))}
 
             <div className="my-3 border-t border-slate-100" />
+            <div className="pb-3"><ThemeToggle /></div>
 
             {isPending ? (
               <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
@@ -391,5 +428,7 @@ export default function Navbar() {
     </header>
   );
 }
+
+
 
 

@@ -28,6 +28,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 1. Verify authenticated user
     const session = await auth.api.getSession({
       headers: await headers(),
     });
@@ -39,6 +40,7 @@ export async function DELETE(
       );
     }
 
+    // 2. Validate booking ID
     const { id } = await context.params;
 
     if (!ObjectId.isValid(id)) {
@@ -48,9 +50,13 @@ export async function DELETE(
       );
     }
 
+    const bookingId = new ObjectId(id);
+    const userId = session.user.id;
+
+    // 3. Verify booking ownership
     const booking = await db.collection("bookings").findOne({
-      _id: new ObjectId(id),
-      userId: session.user.id,
+      _id: bookingId,
+      userId,
     });
 
     if (!booking) {
@@ -60,6 +66,7 @@ export async function DELETE(
       );
     }
 
+    // 4. Only pending bookings can be cancelled
     if (booking.status !== "pending") {
       return NextResponse.json(
         {
@@ -70,10 +77,11 @@ export async function DELETE(
       );
     }
 
-    await db.collection("bookings").updateOne(
+    // 5. Atomic cancellation: update only if status is still pending
+    const result = await db.collection("bookings").updateOne(
       {
-        _id: new ObjectId(id),
-        userId: session.user.id,
+        _id: bookingId,
+        userId,
         status: "pending",
       },
       {
@@ -83,6 +91,17 @@ export async function DELETE(
         },
       }
     );
+
+    // 6. Check whether the booking was actually updated
+    if (result.matchedCount === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "This booking is no longer pending and cannot be cancelled.",
+        },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({
       success: true,

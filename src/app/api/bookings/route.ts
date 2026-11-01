@@ -1,11 +1,8 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
-import { MongoClient } from "mongodb";
-
-
 
 const mongoUri = process.env.MONGODB_URI;
 
@@ -31,14 +28,9 @@ async function getAuthenticatedUser() {
     headers: await headers(),
   });
 
-  if (!session?.user) {
-    return null;
-  }
-
-  return session.user;
+  return session?.user ?? null;
 }
 
-// GET: নিজের booking দেখাবে
 function getBangladeshDate(): string {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Dhaka",
@@ -58,6 +50,7 @@ function getBangladeshDate(): string {
   return `${year}-${month}-${day}`;
 }
 
+// GET: নিজের booking দেখাবে
 export async function GET() {
   try {
     const user = await getAuthenticatedUser();
@@ -68,6 +61,8 @@ export async function GET() {
         { status: 401 }
       );
     }
+
+    await client.connect();
 
     const bookings = await db
       .collection("bookings")
@@ -93,9 +88,7 @@ export async function GET() {
   }
 }
 
-// POST: নতুন booking তৈরি করবে
-
-
+// POST: Transaction-protected booking creation
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser();
@@ -142,18 +135,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const dateParts = bookingDate.split("-").map(Number);
-      const [year, month, day] = dateParts;
-      const selectedDate = new Date(Date.UTC(year, month - 1, day));
+    const [year, month, day] = bookingDate.split("-").map(Number);
+    const selectedDate = new Date(Date.UTC(year, month - 1, day));
 
-      if (
-        dateParts.length !== 3 ||
-        !Number.isFinite(selectedDate.getTime()) ||
-        selectedDate.getUTCFullYear() !== year ||
-        selectedDate.getUTCMonth() !== month - 1 ||
-        selectedDate.getUTCDate() !== day ||
-        bookingDate < getBangladeshDate()
-      ) {
+    if (
+      selectedDate.getUTCFullYear() !== year ||
+      selectedDate.getUTCMonth() !== month - 1 ||
+      selectedDate.getUTCDate() !== day ||
+      bookingDate < getBangladeshDate()
+    ) {
       return NextResponse.json(
         { success: false, message: "Please select today or a future date." },
         { status: 400 }
@@ -169,44 +159,134 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const studio = await db.collection("studios").findOne({
-      _id: new ObjectId(studioId),
-    });
+    await client.connect();
 
-    if (!studio) {
-      return NextResponse.json(
-        { success: false, message: "Studio not found." },
-        { status: 404 }
+    const studioObjectId = new ObjectId(studioId);
+    const session = client.startSession();
+
+    let bookingResult:
+      | { conflict: true }
+      | { conflict: false; booking: Record<string, unknown> & { _id: ObjectId } }
+      | null = null;
+
+    try {
+      await session.withTransaction(
+        async () => {
+          // Atomic write on the studio document serializes
+          // concurrent booking transactions for this studio.
+          const studioUpdate = await db.collection("studios").updateOne(
+            { _id: studioObjectId },
+            { $inc: { bookingLockVersion: 1 } },
+            { session }
+          );
+
+          if (studioUpdate.matchedCount === 0) {
+            throw new Error("STUDIO_NOT_FOUND");
+          }
+
+          const studio = await db.collection("studios").findOne(
+            { _id: studioObjectId },
+            { session }
+          );
+
+          if (!studio) {
+            throw new Error("STUDIO_NOT_FOUND");
+          }
+
+          if (guestCount > Number(studio.maxCapacity || 1)) {
+            throw new Error("GUEST_CAPACITY_EXCEEDED");
+          }
+
+          const overlappingBooking = await db
+            .collection("bookings")
+            .findOne(
+              {
+                studioId,
+                bookingDate,
+                status: { $in: ["pending", "confirmed"] },
+                startTime: { $lt: endTime },
+                endTime: { $gt: startTime },
+              },
+              { session }
+            );
+
+          if (overlappingBooking) {
+            bookingResult = { conflict: true };
+            return;
+          }
+
+          const [startHour, startMinute] = startTime.split(":").map(Number);
+          const [endHour, endMinute] = endTime.split(":").map(Number);
+
+          const duration =
+            endHour * 60 +
+            endMinute -
+            (startHour * 60 + startMinute);
+
+          const totalHours = duration / 60;
+          const hourlyRate = Number(studio.hourlyRate);
+          const totalPrice = totalHours * hourlyRate;
+
+          if (!Number.isFinite(hourlyRate) || hourlyRate < 0) {
+            throw new Error("INVALID_STUDIO_PRICE");
+          }
+
+          const booking = {
+            studioId,
+            studioTitle: studio.title,
+            studioImage: studio.image || "",
+            location: studio.location || "",
+            userId: user.id,
+            userName: user.name || "",
+            userEmail: user.email,
+            bookingDate,
+            startTime,
+            endTime,
+            guests: guestCount,
+            hourlyRate,
+            totalHours,
+            totalPrice,
+            status: "pending",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+
+          const result = await db.collection("bookings").insertOne(
+            booking,
+            { session }
+          );
+
+          bookingResult = {
+            conflict: false,
+            booking: {
+              ...booking,
+              _id: result.insertedId,
+            },
+          };
+        },
+        {
+          readPreference: "primary",
+          readConcern: { level: "snapshot" },
+          writeConcern: { w: "majority" },
+        }
       );
+    } finally {
+      await session.endSession();
     }
 
-    if (guestCount > Number(studio.maxCapacity || 1)) {
-      return NextResponse.json(
-        { success: false, message: "Guest count exceeds studio capacity." },
-        { status: 400 }
-      );
+    const finalBookingResult = bookingResult as
+      | { conflict: true }
+      | {
+          conflict: false;
+          booking: Record<string, unknown> & { _id: ObjectId };
+        }
+      | null;
+
+    if (!finalBookingResult) {
+      throw new Error("Booking transaction did not return a result.");
     }
 
-    const [startHour, startMinute] = startTime.split(":").map(Number);
-    const [endHour, endMinute] = endTime.split(":").map(Number);
-
-    const duration =
-      endHour * 60 +
-      endMinute -
-      (startHour * 60 + startMinute);
-
-    const totalHours = duration / 60;
-    const totalPrice = totalHours * Number(studio.hourlyRate);
-
-    const overlappingBooking = await db.collection("bookings").findOne({
-      studioId,
-      bookingDate,
-      status: { $in: ["pending", "confirmed"] },
-      startTime: { $lt: endTime },
-      endTime: { $gt: startTime },
-    });
-
-    if (overlappingBooking) {
+    if (finalBookingResult.conflict) {
       return NextResponse.json(
         {
           success: false,
@@ -216,40 +296,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const booking = {
-      studioId,
-      studioTitle: studio.title,
-      studioImage: studio.image || "",
-      location: studio.location || "",
-      userId: user.id,
-      userName: user.name || "",
-      userEmail: user.email,
-      bookingDate,
-      startTime,
-      endTime,
-      guests: guestCount,
-      hourlyRate: Number(studio.hourlyRate),
-      totalHours,
-      totalPrice,
-      status: "pending",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    const result = await db.collection("bookings").insertOne(booking);
-
     return NextResponse.json(
       {
         success: true,
         message: "Booking request submitted successfully!",
         data: {
-          ...booking,
-          _id: result.insertedId.toString(),
+          ...finalBookingResult.booking,
+          _id: finalBookingResult.booking._id.toString(),
         },
       },
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "STUDIO_NOT_FOUND") {
+        return NextResponse.json(
+          { success: false, message: "Studio not found." },
+          { status: 404 }
+        );
+      }
+
+      if (error.message === "GUEST_CAPACITY_EXCEEDED") {
+        return NextResponse.json(
+          { success: false, message: "Guest count exceeds studio capacity." },
+          { status: 400 }
+        );
+      }
+
+      if (error.message === "INVALID_STUDIO_PRICE") {
+        return NextResponse.json(
+          { success: false, message: "Studio price is invalid." },
+          { status: 400 }
+        );
+      }
+    }
+
     console.error("Create booking error:", error);
 
     return NextResponse.json(
@@ -258,4 +339,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
